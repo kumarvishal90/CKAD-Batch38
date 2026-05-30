@@ -244,7 +244,7 @@ kubectl get pods
 
 Get a shell to the container in the Pod using the Pod name from the previous step.
 ```
-kubectl exec -it <pod_name> -- /bin/bash
+kubectl exec -it pod1 -- /bin/bash
 ``` 
 
 Install curl in the container
