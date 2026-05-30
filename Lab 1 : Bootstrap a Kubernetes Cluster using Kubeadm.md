@@ -23,104 +23,105 @@ To begin, log in to AWS Console.
         <p>
         
       #!/bin/bash
+      set -euxo pipefail
+      KUBERNETES_VERSION="1.29.0-1.1"
+        CRIO_VERSION="1.29"
 
-set -euxo pipefail
+        # Disable swap
+        swapoff -a
+        sed -i '/ swap / s/^/#/' /etc/fstab
 
-KUBERNETES_VERSION="1.29.0-1.1"
-CRIO_VERSION="1.29"
+        apt-get update -y
 
-# Disable swap
-swapoff -a
-sed -i '/ swap / s/^/#/' /etc/fstab
+        # Kernel modules
+        cat <<EOF >/etc/modules-load.d/k8s.conf
+        overlay
+        br_netfilter
+        EOF
 
-apt-get update -y
+        modprobe overlay
+        modprobe br_netfilter
+        
+        # Sysctl settings
+        cat <<EOF >/etc/sysctl.d/k8s.conf
+        net.bridge.bridge-nf-call-iptables=1
+        net.bridge.bridge-nf-call-ip6tables=1
+        net.ipv4.ip_forward=1
+        EOF
+        
+        sysctl --system
+        
+        # Install dependencies
+        apt-get install -y \
+        curl \
+        gpg \
+        apt-transport-https \
+        ca-certificates \
+        software-properties-common \
+        jq
+        
+        mkdir -p /etc/apt/keyrings
+        
+        ###########################################
+        # Install CRI-O
+        ###########################################
+        
+        curl -fsSL \
+        https://pkgs.k8s.io/addons:/cri-o:/stable:/v${CRIO_VERSION}/deb/Release.key \
+        | gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+        
+        echo \
+        "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] \
+        https://pkgs.k8s.io/addons:/cri-o:/stable:/v${CRIO_VERSION}/deb/ /" \
+        > /etc/apt/sources.list.d/cri-o.list
+        
+        apt-get update -y
+        apt-get install -y cri-o
+        
+        systemctl enable crio --now
+        
+        ###########################################
+        # Install Kubernetes Components
+        ###########################################
+        
+        curl -fsSL \
+        https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key \
+        | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+        
+        echo \
+        "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
+        https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /" \
+        > /etc/apt/sources.list.d/kubernetes.list
+        
+        apt-get update -y
+        
+        apt-get install -y \
+        kubelet=${KUBERNETES_VERSION} \
+        kubeadm=${KUBERNETES_VERSION} \
+        kubectl=${KUBERNETES_VERSION}
+        
+        apt-mark hold kubelet kubeadm kubectl
+        
+        ###########################################
+        # Configure Node IP
+        ###########################################
+        
+        LOCAL_IP=$(hostname -I | awk '{print $1}')
+        
+        cat <<EOF >/etc/default/kubelet
+        KUBELET_EXTRA_ARGS=--node-ip=${LOCAL_IP}
+        EOF
+        
+        systemctl restart kubelet
+        
+        echo "===================================="
+        echo "Kubernetes Installed Successfully"
+        echo "CRI-O Installed Successfully"
+        echo "Node IP: ${LOCAL_IP}"
+        echo "===================================="
+  
+  
 
-# Kernel modules
-cat <<EOF >/etc/modules-load.d/k8s.conf
-overlay
-br_netfilter
-EOF
-
-modprobe overlay
-modprobe br_netfilter
-
-# Sysctl settings
-cat <<EOF >/etc/sysctl.d/k8s.conf
-net.bridge.bridge-nf-call-iptables=1
-net.bridge.bridge-nf-call-ip6tables=1
-net.ipv4.ip_forward=1
-EOF
-
-sysctl --system
-
-# Install dependencies
-apt-get install -y \
-curl \
-gpg \
-apt-transport-https \
-ca-certificates \
-software-properties-common \
-jq
-
-mkdir -p /etc/apt/keyrings
-
-###########################################
-# Install CRI-O
-###########################################
-
-curl -fsSL \
-https://pkgs.k8s.io/addons:/cri-o:/stable:/v${CRIO_VERSION}/deb/Release.key \
-| gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
-
-echo \
-"deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] \
-https://pkgs.k8s.io/addons:/cri-o:/stable:/v${CRIO_VERSION}/deb/ /" \
-> /etc/apt/sources.list.d/cri-o.list
-
-apt-get update -y
-apt-get install -y cri-o
-
-systemctl enable crio --now
-
-###########################################
-# Install Kubernetes Components
-###########################################
-
-curl -fsSL \
-https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key \
-| gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-
-echo \
-"deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] \
-https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /" \
-> /etc/apt/sources.list.d/kubernetes.list
-
-apt-get update -y
-
-apt-get install -y \
-kubelet=${KUBERNETES_VERSION} \
-kubeadm=${KUBERNETES_VERSION} \
-kubectl=${KUBERNETES_VERSION}
-
-apt-mark hold kubelet kubeadm kubectl
-
-###########################################
-# Configure Node IP
-###########################################
-
-LOCAL_IP=$(hostname -I | awk '{print $1}')
-
-cat <<EOF >/etc/default/kubelet
-KUBELET_EXTRA_ARGS=--node-ip=${LOCAL_IP}
-EOF
-
-systemctl restart kubelet
-
-echo "===================================="
-echo "Kubernetes Installed Successfully"
-echo "CRI-O Installed Successfully"
-echo "Node IP: ${LOCAL_IP}"
-echo "===================================="
 
 ### Task 3: Initializing the Cluster
 
