@@ -22,7 +22,7 @@ To begin, log in to AWS Console.
         <details><summary>User Data</summary>
         <p>
         
-        #!/bin/bash
+      #!/bin/bash
 
 set -euxo pipefail
 
@@ -121,10 +121,6 @@ echo "Kubernetes Installed Successfully"
 echo "CRI-O Installed Successfully"
 echo "Node IP: ${LOCAL_IP}"
 echo "===================================="
-```
-```
-bash kubeadm-setup.sh
-```
 
 ### Task 3: Initializing the Cluster
 
